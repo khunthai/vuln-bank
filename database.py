@@ -4,16 +4,24 @@ from psycopg2 import pool
 from datetime import datetime
 import time
 
-# Vulnerable database configuration
-# CWE-259: Use of Hard-coded Password
-# CWE-798: Use of Hard-coded Credentials
-DB_CONFIG = {
-    'dbname': os.getenv('DB_NAME', 'vulnerable_bank'),
-    'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD', 'postgres'),  # Hardcoded password in default value
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432')
-}
+# Database configuration using environment variables
+# Supports both individual connection parameters and DATABASE_URL
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+if DATABASE_URL:
+    # Use DATABASE_URL if available (preferred for managed databases)
+    DB_CONFIG = {
+        'dsn': DATABASE_URL
+    }
+else:
+    # Fallback to individual parameters
+    DB_CONFIG = {
+        'dbname': os.getenv('DB_NAME', 'vulnerable_bank'),
+        'user': os.getenv('DB_USER', 'postgres'),
+        'password': os.getenv('DB_PASSWORD', 'postgres'),
+        'host': os.getenv('DB_HOST', 'localhost'),
+        'port': os.getenv('DB_PORT', '5432')
+    }
 
 # Create a connection pool
 connection_pool = None
@@ -28,11 +36,20 @@ def init_connection_pool(min_connections=1, max_connections=10, max_retries=5, r
     
     while retry_count < max_retries:
         try:
-            connection_pool = psycopg2.pool.SimpleConnectionPool(
-                min_connections,
-                max_connections,
-                **DB_CONFIG
-            )
+            if 'dsn' in DB_CONFIG:
+                # Connect using DATABASE_URL
+                connection_pool = psycopg2.pool.SimpleConnectionPool(
+                    min_connections,
+                    max_connections,
+                    DB_CONFIG['dsn']
+                )
+            else:
+                # Connect using individual parameters
+                connection_pool = psycopg2.pool.SimpleConnectionPool(
+                    min_connections,
+                    max_connections,
+                    **DB_CONFIG
+                )
             print("Database connection pool created successfully")
             return
         except Exception as e:
@@ -259,3 +276,4 @@ def execute_transaction(queries_and_params):
         raise e
     finally:
         return_connection(conn)
+
